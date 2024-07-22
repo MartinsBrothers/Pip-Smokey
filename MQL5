@@ -1,0 +1,258 @@
+input string comment="";
+input int magic=1234;
+
+input string moneymanagement="Money Management";
+
+input double lots1=0.1;
+input double lots2=0.2;
+input double lots3=0.3;
+input bool lotsoptimized=false;
+input double risk1=1;
+input double risk2=2;
+input double risk3=3;
+input bool martingale=false;
+input double multiplier=2.0;
+input double minlot=0.01;
+input double maxlot=10;
+input double lotdigits=2;
+input bool basketpercent=false;
+input double profit=10;
+input double loss=30;
+
+input string ordersmanagement="Order Management";
+
+input bool oppositeclose=true;
+input bool reversesignals=false;
+input int maxtrades=100;
+input int tradesperbar=1;
+input bool hidestop=false;
+input bool hidetarget=false;
+input int buystop=0;
+input int buytarget=0;
+input int sellstop=0;
+input int selltarget=0;
+input int trailingstart=0;
+input int trailingstop=0;
+input int trailingstep=1;
+input int breakevengain=0;
+input int breakeven=0;
+input int expiration=225;
+input int slippage=5;
+input double maxspread=20;
+
+input string entrylogics="Entry Logics";
+
+input int tenkansen=9;
+input int kijunsen=26;
+input int senkospan=52;
+input int shift=1;
+
+input string timefilter="Time Filter";
+
+input int gmtshift=2;
+input bool filter=false;
+input int start=7;
+input int end=21;
+input bool tradesunday=true;
+input bool fridayfilter=false;
+input int fridayend=24;
+
+datetime t0,t1,lastbuyopentime,lastsellopentime;
+double cb=0,lastbuyopenprice=0,lastsellopenprice=0;
+double sl,tp,pt,mt,min,max,lastprofit;
+int i,j,k,l,dg,bc=-1,tpb=0,total,ticket;
+int buyopenposition=0,sellopenposition=0;
+int totalopenposition=0,buyorderprofit=0;
+int sellorderprofit=0,cnt=0;
+double lotsfactor=1,ilots;
+double initiallotsfactor=1;
+int istart,iend;
+double lots=0.1,risk=1;
+
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   t0=Time[0];t1=Time[0];dg=_Digits;
+   if(dg==3 || dg==5){pt=_Point*10;mt=10;}else{pt=_Point;mt=1;}
+   
+   //|---------martingale initialization
+   int tempfactor,total=OrdersTotal();
+   if(tempfactor==0 && total>0)
+   {
+      for(int cnt=0;cnt<total;cnt++)
+      {
+         if(OrderSelect(cnt,SELECT_BY_POS))
+         {
+            if(OrderSymbol()==Symbol() && OrderMagicNumber()==magic)
+            {
+               tempfactor=NormalizeDouble(OrderLots()/lots,1+(SymbolInfoDouble(Symbol(),SYMBOL_VOLUME_MIN)==0.01));
+               break;
+            }
+         }
+      }
+   }
+   int histotal=HistoryOrdersTotal();
+   if(tempfactor==0 && histotal>0)
+   {
+      for(cnt=0;cnt<histotal;cnt++)
+      {
+         if(OrderSelect(cnt,SELECT_BY_POS,MODE_HISTORY))
+         {
+            if(OrderSymbol()==Symbol() && OrderMagicNumber()==magic)
+            {
+               tempfactor=NormalizeDouble(OrderLots()/lots,1+(SymbolInfoDouble(Symbol(),SYMBOL_VOLUME_MIN)==0.01));
+               break;
+            }
+         }
+      }
+   }
+   if(tempfactor>0)
+   lotsfactor=tempfactor;
+
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Expert deinitialization function                                 |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+}
+
+//+------------------------------------------------------------------+
+//| Expert tick function                                             |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+   total=OrdersTotal();
+   
+   if(breakevengain>0)
+   {
+      for(int b=0;b<total;b++)
+      {
+         if(OrderSelect(b,SELECT_BY_POS,MODE_TRADES))
+         {
+            if(OrderType()<=OP_SELL && OrderSymbol()==Symbol() && OrderMagicNumber()==magic)
+            {
+               if(OrderType()==OP_BUY)
+               {
+                  if(NormalizeDouble((Bid-OrderOpenPrice()),dg)>=NormalizeDouble(breakevengain*pt,dg))
+                  {
+                     if(NormalizeDouble((OrderStopLoss()-OrderOpenPrice()),dg)<NormalizeDouble(breakeven*pt,dg))
+                     {
+                        OrderModify(OrderTicket(),OrderOpenPrice(),NormalizeDouble(OrderOpenPrice()+breakeven*pt,dg),OrderTakeProfit(),0,clrBlue);
+                        return;
+                     }
+                  }
+               }
+               else
+               {
+                  if(NormalizeDouble((OrderOpenPrice()-Ask),dg)>=NormalizeDouble(breakevengain*pt,dg))
+                  {
+                     if(NormalizeDouble((OrderOpenPrice()-OrderStopLoss()),dg)<NormalizeDouble(breakeven*pt,dg))
+                     {
+                        OrderModify(OrderTicket(),OrderOpenPrice(),NormalizeDouble(OrderOpenPrice()-breakeven*pt,dg),OrderTakeProfit(),0,clrRed);
+                        return;
+                     }
+                  }
+               }
+            }
+         }
+      }
+   }
+   
+   if(trailingstop>0)
+   {
+      for(int a=0;a<total;a++)
+      {
+         if(OrderSelect(a,SELECT_BY_POS,MODE_TRADES))
+         {
+            if(OrderType()<=OP_SELL && OrderSymbol()==Symbol() && OrderMagicNumber()==magic)
+            {
+               if(OrderType()==OP_BUY)
+               {
+                  if(NormalizeDouble(Ask,dg)>NormalizeDouble(OrderOpenPrice()+trailingstart*pt,dg) &&
+                  (NormalizeDouble(OrderStopLoss(),dg)<NormalizeDouble(Bid-(trailingstop+trailingstep)*pt,dg))||(OrderStopLoss()==0))
+                  {
+                     OrderModify(OrderTicket(),OrderOpenPrice(),NormalizeDouble(Bid-trailingstop*pt,dg),OrderTakeProfit(),0,clrBlue);
+                     return;
+                  }
+               }
+               else
+               {
+                  if(NormalizeDouble(Bid,dg)<NormalizeDouble(OrderOpenPrice()-trailingstart*pt,dg) &&
+                  (NormalizeDouble(OrderStopLoss(),dg)>(NormalizeDouble(Ask+(trailingstop+trailingstep)*pt,dg)))||(OrderStopLoss()==0))
+                  {                 
+                     OrderModify(OrderTicket(),OrderOpenPrice(),NormalizeDouble(Ask+trailingstop*pt,dg),OrderTakeProfit(),0,clrRed);
+                     return;
+                  }
+               }
+            }
+         }
+      }
+   }
+   
+   if(basketpercent)
+   {
+      double ipf=profit*(0.01*AccountBalance());
+      double ilo=loss*(0.01*AccountBalance());
+      cb=AccountEquity()-AccountBalance();
+      if(cb>=ipf || cb<=(ilo*(-1)))
+      {
+         for(i=total-1;i>=0;i--)
+         {
+            if(OrderSelect(i,SELECT_BY_POS,MODE_TRADES))
+            {
+               if(OrderSymbol()==Symbol() && OrderMagicNumber()==magic && OrderType()==OP_BUY)
+               {
+                  OrderClose(OrderTicket(),OrderLots(),Bid,slippage*pt);
+               }
+               if(OrderSymbol()==Symbol() && OrderMagicNumber()==magic && OrderType()==OP_SELL)
+               {
+                  OrderClose(OrderTicket(),OrderLots(),Ask,slippage*pt);
+               }
+            }
+         }
+         return;
+      }
+   }
+   
+   for(cnt=0;cnt<OrdersTotal();cnt++)
+   {
+      if(OrderSelect(cnt,SELECT_BY_POS,MODE_TRADES))
+      {
+         if(OrderSymbol()==Symbol() && OrderMagicNumber()==magic && OrderCloseTime()==0)
+         {
+            totalopenposition++;
+            lastprofit=OrderProfit();
+            if(OrderType()==OP_BUY)
+            {
+               buyopenposition++;
+               lastbuyopenprice=OrderOpenPrice();
+               buyorderprofit=OrderProfit();
+               lastbuyopentime=OrderOpenTime();
+            }
+            if(OrderType()==OP_SELL)
+            {
+               sellopenposition++;
+               lastsellopenprice=OrderOpenPrice();
+               sellorderprofit=OrderProfit();
+               lastsellopentime=OrderOpenTime();
+            }
+         }
+      }
+   }
+   
+   bool ichibuy=false;
+   bool ichisell=false;
+   
+   double Tenkan=iIchimoku(NULL,0,tenkansen,kijunsen,senkospan,MODE_TENKANSEN,shift);
+   double Kijun=iIchimoku(NULL,0,tenkansen,kijunsen,senkospan,MODE_KIJUNSEN,shift);
+   double Tenkana=iIchimoku(NULL,0,tenkansen,kijunsen,senkospan,MODE_TENKANSEN,shift+1);
+   double Kijuna=iIchimoku(NULL,0,tenkansen,kijunsen,senkospan,MODE_KIJUNSEN,shift+1);
+   
+   double Senkoua=iIchimoku(NULL,0,tenkansen,kijunsen,senkospan,MODE_SENKOUSPANA,shift);
+   double Senkoub=iIchimoku(NULL,0,tenkansen,kijunsen,senkospan,MODE_SENKOUSPANB,shift);
+   

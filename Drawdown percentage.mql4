@@ -1,0 +1,67 @@
+input bool CloseTradesAtPercentageDrawdown;
+input double PercentageDrawdown = 5;
+input bool CloseTradesAtFixedDrawdown;
+input double FixedDrawdown = 1000;
+input bool ResumeTradingAtNextDayAfterDrawdown;
+
+if (CloseTradesAtPercentageDrawdown)
+   {
+      Gd_00000 = 0;
+      Gi_00001 = OrdersTotal() - 1;
+      Gi_00002 = Gi_00001;
+
+      if (Gi_00001 >= 0)
+      {
+         do
+         {
+            if (OrderSelect(Gi_00002, SELECT_BY_POS, MODE_TRADES) && OrderMagicNumber() == Magic && OrderSymbol() == _Symbol && OrderComment() == Is_00030)
+            {
+               Gd_00001 = (Gd_00000 + OrderProfit());
+               Gd_00001 = (Gd_00001 + OrderSwap());
+               Gd_00000 = (Gd_00001 + OrderCommission());
+            }
+
+            Gi_00002 = Gi_00002 - 1;
+         }
+         while (Gi_00002 >= 0);
+      }
+
+      Gd_00001 = -PercentageDrawdown;
+
+      if ((Gd_00000 <= (Gd_00001 * AccountBalance()) / 100))
+      {
+         tmp_str00000 = "EP Closed At Percentage Drawdown";
+         func_1037(tmp_str00000);
+      }
+   }
+
+   if (CloseTradesAtFixedDrawdown)
+   {
+      Gd_00001 = 0;
+      Gi_00003 = OrdersTotal() - 1;
+      Gi_00004 = Gi_00003;
+
+      if (Gi_00003 >= 0)
+      {
+         do
+         {
+            if (OrderSelect(Gi_00004, SELECT_BY_POS, MODE_TRADES) && OrderMagicNumber() == Magic && OrderSymbol() == _Symbol && OrderComment() == Is_00030)
+            {
+               Gd_00003 = (Gd_00001 + OrderProfit());
+               Gd_00003 = (Gd_00003 + OrderSwap());
+               Gd_00001 = (Gd_00003 + OrderCommission());
+            }
+
+            Gi_00004 = Gi_00004 - 1;
+         }
+         while (Gi_00004 >= 0);
+      }
+
+      Gd_00003 = -FixedDrawdown;
+
+      if ((Gd_00001 <= Gd_00003))
+      {
+         tmp_str00001 = "EP Closed At Percentage Drawdown";
+         func_1037(tmp_str00001);
+      }
+   }
